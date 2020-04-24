@@ -1,0 +1,115 @@
+---
+title: "KittyProduction"
+output: html_document
+---
+Reading in the packages (the packages are already installed in the R environment)
+```{r}
+library(dplyr)
+library(lubridate)
+#library(Rcpp)                  #Dependency for dplyr
+#library(rlang)                 #Dependency for dplyr
+#library(pillar)                #Dependency for dplyr
+library(ggplot2)
+library(tidyverse)
+#library(shiny)                 #Dependency for leaflet
+library(leaflet)
+library(RColorBrewer)
+```
+Set working directory
+```{r}
+setwd("/Users/charlesefox/Desktop/Work/Data From Mid-Con Energy")
+```
+Reading in the data
+```{r}
+setwd("/Users/charlesefox/Desktop/Work/Data From Mid-Con Energy")
+Production <- read.csv(file = "Kitty.csv", header = TRUE, ",", stringsAsFactors = FALSE)
+Header <- read.csv(file = "Header.csv", header = TRUE, ",", stringsAsFactors = FALSE)
+Production$API  <- as.character(Production$API)
+Header$API <- as.character(Header$API)
+Production
+Header
+```
+Grouping the data by API number
+```{r}
+ProdGroup <- group_by(Production, API)
+ProdSum <- summarise(ProdGroup, 
+                     oilcum = sum(OIL), 
+                     gascum = sum(GAS), 
+                     watercum = sum(WTR)
+                     )
+ProdSum
+```
+
+
+
+Join the files so that the production is tied to lat-longs
+```{r}
+JoinedFile <- merge(x=ProdSum, y=Header,by="API", all.x=FALSE, all.y=FALSE)
+JoinedFile
+```
+
+Write the Joined file to a csv file 
+```{r}
+setwd("/Users/charlesefox/Desktop/Work/Data From Mid-Con Energy")
+write.csv(JoinedFile, "JoinedFile.csv", row.names=TRUE)
+```
+
+Now join a new file so that the monthly data is tied to the Header File
+This next few sections will create a plot of monthly producdtion for the field
+```{r}
+ProdJoinedFile <- merge(x=Production, y=Header,by="API", all.x=FALSE, all.y=FALSE)
+ProdJoinedFile$DATE <- as.Date(ProdJoinedFile$DATE, format='%m/%d/%y')  
+ProdJoinedFile
+setwd("/Users/charlesefox/Desktop/Work/Data From Mid-Con Energy")
+write.csv(ProdJoinedFile, "ProdJoinedFile.csv", row.names = TRUE)
+```
+
+Pull out one companies data
+```{r}
+ProdJoinedFile %>% filter(CurrentOperator == "MIDCON ENERGY OPERATING")
+```
+
+
+```{r}
+p <- ggplot(ProdJoinedFile, aes(x=DATE, y=OIL)) +
+  geom_area(color="black")
+p
+pg <- ggplot_build(p)
+pg
+setwd("/Users/charlesefox/Desktop/Work/Data From Mid-Con Energy")
+write.csv(pg$data[[1]], "pg.csv", row.names = TRUE)
+```
+create an interactive map
+```{r}
+c25 <- c(
+  "dodgerblue2", "#E31A1C", # red
+  "green4",
+  "#6A3D9A", # purple
+  "#FF7F00", # orange
+  "black", "gold1",
+  "skyblue2", "#FB9A99", # lt pink
+  "palegreen2",
+  "#CAB2D6", # lt purple
+  "#FDBF6F", # lt orange
+  "gray70", "khaki2",
+  "maroon", "orchid1", "deeppink1", "blue1", "steelblue4",
+  "darkturquoise", "green1", "yellow4", "yellow3",
+  "darkorange4", "brown"
+   )
+pie(rep(1, 25), col = c25)
+popupinfo <- c(paste0("<b>", (JoinedFile$WellName),"<br/>",
+                      "<b>", (JoinedFile$CurrentOperator), "<br>",
+                      "<b> Cum Oil <b>", round(JoinedFile$oilcum), "<br/>",
+                      "<b> Cum Gas <b>", round(JoinedFile$gascum),"<br/>",
+                      "<b> Cum Wtr <b>", round(JoinedFile$watercum)))
+pal <- colorNumeric(palette = "Set3", domain = JoinedFile$oilcum)
+leaflet(data=JoinedFile) %>% 
+  addTiles() %>%
+  addCircleMarkers(data = JoinedFile, radius= ~oilcum/10000, lng = ~Longitude, lat = ~Latitude, popup = popupinfo,
+#                   color = ~pal(oilcum)) %>%
+                    color = "Blue") # %>%
+#   addLegend(pal = pal, values = ~oilcum, opacity = 0.9, title = "Oil Cum, BO")
+#  addLegend(pal = pal, values = ~oilcum, opacity = 0.9, title = "Oil Cum, BO")
+          
+```
+
